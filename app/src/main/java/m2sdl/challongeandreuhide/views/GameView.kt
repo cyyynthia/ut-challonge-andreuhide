@@ -1,25 +1,25 @@
-package m2sdl.challongeandreuhide.views;
+package m2sdl.challongeandreuhide.views
 
 import android.content.Context
-import android.content.Context.MODE_PRIVATE
-import android.content.SharedPreferences
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.view.SurfaceHolder
 import android.view.SurfaceView
-import m2sdl.challongeandreuhide.MainActivity.Companion.SHARED_PREFS_NAME
+import androidx.compose.ui.geometry.Offset
+import m2sdl.challongeandreuhide.geometry.Rect
+import m2sdl.challongeandreuhide.states.GameState
+import m2sdl.challongeandreuhide.states.SensorState
 import m2sdl.challongeandreuhide.threads.GameThread
+import m2sdl.challongeandreuhide.threads.SensorThread
 
-class GameView(context: Context) : SurfaceView(context), SurfaceHolder.Callback {
-	private val sharedPreferences = context.getSharedPreferences(SHARED_PREFS_NAME, MODE_PRIVATE)
+class GameView(context: Context, val sensorState: SensorState) : SurfaceView(context), SurfaceHolder.Callback {
+	private val gameState = GameState(Offset(0f, 0f))
 
-	private val thread = GameThread(holder, this)
+	private val gameThread = GameThread(context, holder, this, sensorState, gameState)
+	private val sensorThread = SensorThread(sensorState)
 
-	private var x = 0
-
-	private val y: Int
-		get() = sharedPreferences.getInt("valeur_y", 0)
+	constructor(context: Context) : this(context, SensorState())
 
 	init {
 		holder.addCallback(this)
@@ -27,27 +27,99 @@ class GameView(context: Context) : SurfaceView(context), SurfaceHolder.Callback 
 
 	override fun draw(canvas: Canvas) {
 		super.draw(canvas)
-		canvas.drawColor(Color.WHITE)
-		val paint = Paint()
-		paint.setColor(Color.rgb(250, 0, 0))
-		canvas.drawRect(x, y, x + y, 200, paint)
+
+		drawArena(canvas)
+
+		gameState.tower.draw(context, canvas)
+		gameState.mobs.forEach { it.draw(context, canvas) }
+
+		drawAttack(canvas) // only on attack
+		drawHud(canvas)
+	}
+
+	private fun drawArena(canvas: Canvas) {
+		var transparentValue = 0f
+		Rect(0f, 0f, canvas.width.toFloat(), canvas.height.toFloat()).draw(canvas, Color.rgb(148, 255, 145))
+		canvas.drawCircle(
+			gameState.tower.state.position.x,
+			gameState.tower.state.position.y,
+			500f,
+			Paint().apply { color = Color.rgb(255, 215, 180) })
+
+		transparentValue = when {
+			sensorState.effectiveLight < 0.25 -> 0.35f
+			sensorState.effectiveLight < 0.5 -> 0.25f
+			sensorState.effectiveLight < 0.75 -> 0.15f
+			else -> 0f
+		}
+		Rect(0f, 0f, canvas.width.toFloat(), canvas.height.toFloat()).draw(
+			canvas,
+			Color.argb(transparentValue, 0f, 0f, 0f)
+		)
+	}
+
+	private fun drawPower(canvas: Canvas) {
+		canvas.drawCircle(
+			canvas.width - 50f,
+			50f,
+			30f,
+			Paint().apply { color = Color.rgb(195, 195, 195) })
+		val now = System.currentTimeMillis()
+		val timerValue = (now - gameThread.degatsSecousses.initCooldown) / 1000
+		if (timerValue < 5) {
+			canvas.drawText(
+				timerValue.toString(),
+				canvas.width - 56f,
+				55f,
+				Paint().apply { color = Color.BLACK; textSize = 20f })
+		} else {
+			canvas.drawText(
+				"OK",
+				canvas.width - 63f,
+				55f,
+				Paint().apply { color = Color.BLACK; textSize = 20f })
+		}
+	}
+
+	private fun drawAttack(canvas: Canvas) {
+		canvas.drawCircle(
+			gameState.tower.state.position.x,
+			gameState.tower.state.position.y,
+			250f,
+			Paint().apply { color = Color.argb(35, 255, 0, 0) })
+
+
+	}
+
+	private fun drawHud(canvas: Canvas) {
+		val coef = gameState.tower.state.health / gameState.tower.initialHealth
+
+		val container = Rect(15f, 15f, 300f, 40f, 20f)
+		val background = container.inner(5f)
+		val healthBar = background.with(width = if (background.width * coef > 0) background.width * coef else 0f)
+
+		container.draw(canvas, Color.rgb(128, 128, 128))
+		background.draw(canvas, Color.rgb(128, 0, 0))
+		healthBar.draw(canvas, Color.RED)
+
+		drawPower(canvas)
 	}
 
 	override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
-		// TODO()
+		gameState.tower.state.position = Offset(width.toFloat() / 2, height.toFloat() / 2)
 	}
 
 	override fun surfaceCreated(holder: SurfaceHolder) {
-		thread.running = true
-		thread.start()
+		start()
 	}
 
 	override fun surfaceDestroyed(holder: SurfaceHolder) {
 		var retry = true
 		while (retry) {
 			try {
-				thread.running = false
-				thread.join()
+				suspend()
+				gameThread.join()
+				sensorThread.join()
 			} catch (e: InterruptedException) {
 				e.printStackTrace()
 			}
@@ -55,11 +127,13 @@ class GameView(context: Context) : SurfaceView(context), SurfaceHolder.Callback 
 		}
 	}
 
-	fun update() {
-		x = (x + 1) % 300
+	fun start() {
+		gameThread.start()
+		sensorThread.start()
 	}
 
-	private fun Canvas.drawRect(left: Int, top: Int, right: Int, bottom: Int, paint: Paint) {
-		drawRect(left.toFloat(), top.toFloat(), right.toFloat(), bottom.toFloat(), paint)
+	fun suspend() {
+		gameThread.shutdown()
+		sensorThread.shutdown()
 	}
 }

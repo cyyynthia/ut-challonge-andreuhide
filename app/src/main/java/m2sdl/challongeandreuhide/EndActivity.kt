@@ -1,0 +1,69 @@
+package m2sdl.challongeandreuhide
+
+import android.content.Intent
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
+import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.unit.dp
+
+class EndActivity : ComponentActivity() {
+	@OptIn(ExperimentalMaterial3Api::class)
+	override fun onCreate(savedInstanceState: Bundle?) {
+		super.onCreate(savedInstanceState)
+		enableEdgeToEdge()
+
+		val timer = intent.getLongExtra("tempsPris", 0L)
+
+		setContent {
+
+			Scaffold(
+				topBar = {
+					CenterAlignedTopAppBar(
+						title = { Text("MineTower") }
+					)
+				}
+			) { innerPadding ->
+				Column(
+					modifier = Modifier
+						.fillMaxSize()
+						.padding(innerPadding),
+					verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
+					horizontalAlignment = Alignment.CenterHorizontally,
+				) {
+					Text(
+						"Vous avez défendu la tour pendant ${timer / 1000} secondes",
+						style = MaterialTheme.typography.titleLarge
+					)
+					Button(
+						onClick = {
+							val intent = Intent(this@EndActivity, MainActivity::class.java)
+							startActivity(intent)
+						},
+						modifier = Modifier.padding(16.dp)
+					) {
+						Text(
+							"Retour à l'écran principal",
+							style = MaterialTheme.typography.titleLarge
+						)
+					}
+				}
+			}
+		}
+	}
+}
